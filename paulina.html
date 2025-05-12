@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Czy Paulina będzie w szkole?</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #fefae0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      text-align: center;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+    }
+    .time {
+      font-size: 1.2rem;
+      margin-bottom: 30px;
+      color: #333;
+    }
+    button {
+      margin: 10px;
+      padding: 15px 30px;
+      font-size: 1.2rem;
+      cursor: pointer;
+      border: none;
+      border-radius: 10px;
+      transition: background-color 0.3s;
+    }
+    .yes { background-color: #81c784; }
+    .no { background-color: #e57373; }
+    .maybe { background-color: #ffb74d; }
+    button:hover {
+      opacity: 0.9;
+    }
+    .results {
+      margin-top: 40px;
+      font-size: 1.2rem;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Czy Paulina będzie w szkole???</h1>
+  <div class="time" id="time"></div>
+
+  <div>
+    <button class="yes" onclick="vote('yes')">Tak</button>
+    <button class="no" onclick="vote('no')">Nie</button>
+    <button class="maybe" onclick="vote('maybe')">Tak, ale ucieknie</button>
+  </div>
+
+  <div class="results" id="results"></div>
+
+  <script>
+    // Funkcja do aktualizacji zegara
+    function updateClock() {
+      const now = new Date();
+      const options = {
+        timeZone: 'Europe/Warsaw',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        weekday: 'long'
+      };
+      const formatter = new Intl.DateTimeFormat('pl-PL', options);
+      const parts = formatter.formatToParts(now);
+      const time = parts.find(p => p.type === 'hour').value + ':' +
+                   parts.find(p => p.type === 'minute').value + ':' +
+                   parts.find(p => p.type === 'second').value;
+      const day = parts.find(p => p.type === 'weekday').value;
+      document.getElementById('time').innerText = `🕒 Dziś jest ${day}, godzina ${time}`;
+    }
+
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Funkcja do sprawdzenia czy trzeba zresetować
+    function maybeResetAtFivePM() {
+      const now = new Date();
+      const warsawNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Warsaw" }));
+      const currentDate = warsawNow.toISOString().split("T")[0]; // YYYY-MM-DD
+      const currentHour = warsawNow.getHours();
+
+      const lastResetDate = localStorage.getItem("lastResetDate");
+
+      if (currentHour >= 17 && lastResetDate !== currentDate) {
+        // Resetujemy
+        localStorage.setItem("votes_yes", "0");
+        localStorage.setItem("votes_no", "0");
+        localStorage.setItem("votes_maybe", "0");
+        localStorage.removeItem("lastVoteTime");
+        localStorage.setItem("lastResetDate", currentDate);
+        alert("🌀 Wyniki zostały zresetowane (17:00)!");
+      }
+    }
+
+    maybeResetAtFivePM();
+
+    // Głosowanie
+    const results = {
+      yes: parseInt(localStorage.getItem("votes_yes")) || 0,
+      no: parseInt(localStorage.getItem("votes_no")) || 0,
+      maybe: parseInt(localStorage.getItem("votes_maybe")) || 0,
+    };
+
+    function canVote() {
+      const lastVote = localStorage.getItem("lastVoteTime");
+      if (!lastVote) return true;
+      const now = new Date().getTime();
+      const diff = now - parseInt(lastVote);
+      return diff > 24 * 60 * 60 * 1000; // 24h
+    }
+
+    function vote(option) {
+      if (!canVote()) {
+        alert("Możesz zagłosować tylko raz na 24 godziny!");
+        return;
+      }
+      results[option]++;
+      localStorage.setItem(`votes_${option}`, results[option]);
+      localStorage.setItem("lastVoteTime", new Date().getTime());
+      showResults();
+    }
+
+    function showResults() {
+      const total = results.yes + results.no + results.maybe;
+      const percent = (count) => total ? ((count / total) * 100).toFixed(1) : 0;
+      document.getElementById("results").innerHTML = `
+        <p><strong>Wyniki głosowania:</strong></p>
+        <p>✅ Tak: ${percent(results.yes)}%</p>
+        <p>❌ Nie: ${percent(results.no)}%</p>
+        <p>🤔 Tak, ale ucieknie: ${percent(results.maybe)}%</p>
+        <p>👥 Łączna liczba głosów: ${total}</p>
+      `;
+    }
+
+    showResults();
+  </script>
+</body>
+</html>
