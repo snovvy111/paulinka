@@ -22,11 +22,22 @@
     }
     .time {
       font-size: 1.2rem;
-      margin-bottom: 30px;
+      margin-bottom: 20px;
       color: #333;
     }
+    .voting-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+    .buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
     button {
-      margin: 10px;
       padding: 15px 30px;
       font-size: 1.2rem;
       cursor: pointer;
@@ -41,8 +52,25 @@
       opacity: 0.9;
     }
     .results {
-      margin-top: 40px;
+      margin-top: 30px;
       font-size: 1.2rem;
+    }
+    .image img {
+      max-width: 200px;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    input[type="text"] {
+      padding: 10px;
+      font-size: 1rem;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      width: 250px;
+    }
+    .votes-list {
+      margin-top: 20px;
+      font-size: 1rem;
     }
   </style>
 </head>
@@ -51,16 +79,24 @@
   <h1>Czy Paulina będzie w szkole???</h1>
   <div class="time" id="time"></div>
 
-  <div>
-    <button class="yes" onclick="vote('yes')">Tak</button>
-    <button class="no" onclick="vote('no')">Nie</button>
-    <button class="maybe" onclick="vote('maybe')">Tak, ale ucieknie</button>
+  <input type="text" id="nickname" placeholder="Wpisz swój nick (wymagane)" />
+
+  <div class="voting-container">
+    <div class="buttons">
+      <button class="yes" onclick="vote('yes')">Tak</button>
+      <button class="no" onclick="vote('no')">Nie</button>
+      <button class="maybe" onclick="vote('maybe')">Tak, ale ucieknie</button>
+    </div>
+    <div class="image">
+      <img src="Zrzut ekranu 2025-05-12 165343.png" alt="Zdjęcie gościa" />
+    </div>
   </div>
 
   <div class="results" id="results"></div>
+  <div class="votes-list" id="votesList"></div>
 
   <script>
-    // Funkcja do aktualizacji zegara
+    // Aktualizacja zegara
     function updateClock() {
       const now = new Date();
       const options = {
@@ -78,25 +114,23 @@
       const day = parts.find(p => p.type === 'weekday').value;
       document.getElementById('time').innerText = `🕒 Dziś jest ${day}, godzina ${time}`;
     }
-
     setInterval(updateClock, 1000);
     updateClock();
 
-    // Funkcja do sprawdzenia czy trzeba zresetować
+    // Resetowanie o 17:00
     function maybeResetAtFivePM() {
       const now = new Date();
       const warsawNow = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Warsaw" }));
-      const currentDate = warsawNow.toISOString().split("T")[0]; // YYYY-MM-DD
+      const currentDate = warsawNow.toISOString().split("T")[0];
       const currentHour = warsawNow.getHours();
-
       const lastResetDate = localStorage.getItem("lastResetDate");
 
       if (currentHour >= 17 && lastResetDate !== currentDate) {
-        // Resetujemy
         localStorage.setItem("votes_yes", "0");
         localStorage.setItem("votes_no", "0");
         localStorage.setItem("votes_maybe", "0");
         localStorage.removeItem("lastVoteTime");
+        localStorage.removeItem("voters");
         localStorage.setItem("lastResetDate", currentDate);
         alert("🌀 Wyniki zostały zresetowane (17:00)!");
       }
@@ -104,29 +138,41 @@
 
     maybeResetAtFivePM();
 
-    // Głosowanie
     const results = {
       yes: parseInt(localStorage.getItem("votes_yes")) || 0,
       no: parseInt(localStorage.getItem("votes_no")) || 0,
       maybe: parseInt(localStorage.getItem("votes_maybe")) || 0,
     };
 
-    function canVote() {
-      const lastVote = localStorage.getItem("lastVoteTime");
-      if (!lastVote) return true;
-      const now = new Date().getTime();
-      const diff = now - parseInt(lastVote);
-      return diff > 24 * 60 * 60 * 1000; // 24h
+    function canVote(nick) {
+      const voters = JSON.parse(localStorage.getItem("voters") || "[]");
+      return !voters.includes(nick);
     }
 
     function vote(option) {
-      if (!canVote()) {
-        alert("Możesz zagłosować tylko raz na 24 godziny!");
+      const nick = document.getElementById("nickname").value.trim();
+      if (!nick) {
+        alert("Musisz wpisać swój nick, aby zagłosować!");
         return;
       }
+      if (!canVote(nick)) {
+        alert("Już oddałeś swój głos!");
+        return;
+      }
+
       results[option]++;
       localStorage.setItem(`votes_${option}`, results[option]);
-      localStorage.setItem("lastVoteTime", new Date().getTime());
+
+      // Zapisz głosującego
+      const voters = JSON.parse(localStorage.getItem("voters") || "[]");
+      voters.push(nick);
+      localStorage.setItem("voters", JSON.stringify(voters));
+
+      // Zapisz kto jak głosował
+      const voteLog = JSON.parse(localStorage.getItem("voteLog") || "[]");
+      voteLog.push({ nick, vote: option });
+      localStorage.setItem("voteLog", JSON.stringify(voteLog));
+
       showResults();
     }
 
@@ -140,6 +186,16 @@
         <p>🤔 Tak, ale ucieknie: ${percent(results.maybe)}%</p>
         <p>👥 Łączna liczba głosów: ${total}</p>
       `;
+
+      const voteLog = JSON.parse(localStorage.getItem("voteLog") || "[]");
+      let listHTML = `<p><strong>Lista głosujących:</strong></p><ul>`;
+      voteLog.forEach(entry => {
+        let label = entry.vote === 'yes' ? '✅ Tak' :
+                    entry.vote === 'no' ? '❌ Nie' : '🤔 Tak, ale ucieknie';
+        listHTML += `<li><strong>${entry.nick}</strong> — ${label}</li>`;
+      });
+      listHTML += `</ul>`;
+      document.getElementById("votesList").innerHTML = listHTML;
     }
 
     showResults();
